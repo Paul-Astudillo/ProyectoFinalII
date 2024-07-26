@@ -432,17 +432,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendImageAndData(String ipAddress, Bitmap image, String detectionResults) {
+        // Obtener la imagen original desde el ImageView
+        ImageView originalImageView = findViewById(R.id.image_original);
+        originalImageView.setDrawingCacheEnabled(true);
+        Bitmap originalBitmap = originalImageView.getDrawingCache();
+
         // Guardar la imagen en un archivo temporal
         String imageFileName = "temp_image.png";
         File imageFile = new File(getExternalFilesDir(null), imageFileName);
         try (FileOutputStream out = new FileOutputStream(imageFile)) {
-            image.compress(Bitmap.CompressFormat.PNG, 100, out);
+            originalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
         } catch (IOException e) {
             Log.e(TAG, "Error saving image", e);
             return;
         }
 
-        // Enviar la imagen y los datos en un hilo secundario
+        // Hilo para enviar la imagen
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -464,8 +469,48 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
-                    // Enviar las posiciones de detección como texto
+                    // Obtener la respuesta del servidor
+                    final int responseCode = connection.getResponseCode();
+                    if (responseCode == HttpURLConnection.HTTP_OK) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this, "Imagen enviada correctamente", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    } else {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this, "Error al enviar la imagen, código: " + responseCode, Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Error al enviar la imagen", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            }
+        }).start();
+
+        // Hilo para enviar el texto
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String serverURL2 = "http://" + ipAddress + ":5000/recepciontxt";
+                try {
+                    URL url = new URL(serverURL2);
+                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("POST");
+                    connection.setDoOutput(true);
                     connection.setRequestProperty("Content-Type", "text/plain");
+
+                    // Enviar las posiciones de detección como texto
                     try (OutputStream outputStream = connection.getOutputStream()) {
                         outputStream.write(detectionResults.getBytes());
                     }
@@ -476,14 +521,14 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                Toast.makeText(MainActivity.this, "Datos enviados correctamente", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, "Texto enviado correctamente", Toast.LENGTH_SHORT).show();
                             }
                         });
                     } else {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                Toast.makeText(MainActivity.this, "Error al enviar los datos, código: " + responseCode, Toast.LENGTH_SHORT).show();
+                                Toast.makeText(MainActivity.this, "Error al enviar el texto, código: " + responseCode, Toast.LENGTH_SHORT).show();
                             }
                         });
                     }
@@ -492,7 +537,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(MainActivity.this, "Error al enviar los datos", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Error al enviar el texto", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -500,8 +545,12 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
+
+
+
+
     private boolean isValidIpAddress(String ipAddress) {
-        String regex = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9][0-9]?)$";
+        String regex = "^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$";
         return ipAddress.matches(regex);
     }
 }
