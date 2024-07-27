@@ -155,6 +155,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
@@ -184,6 +185,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap processedBitmap;
     private String detectionResults;
     private EditText ipEditText;
+    private TextView predictionTextView;
 
     static {
         System.loadLibrary("projectparteii");
@@ -191,7 +193,7 @@ public class MainActivity extends AppCompatActivity {
 
     private native String detectFaces(Bitmap bitmap, Bitmap processedBitmap);
     private native void initCascadePaths(String faceCascade, String eyeCascade, String noseCascade, String mouthCascade);
-
+    private native String predict(Bitmap bitmap, String modelPath);
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -284,11 +286,34 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        predictionTextView = findViewById(R.id.text_prediction);
+        Button buttonPredict = findViewById(R.id.button_predict);
+        buttonPredict.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (originalBitmap != null) {
+                    predictionTextView.setText("Prediciendo...");
+
+                    String modelPath = getFilesDir().getAbsolutePath() + "/fashion_mnist_mlp.xml";
+                    File modelFile = new File(modelPath);
+                    if (modelFile.exists()) {
+                        String prediction = predict(originalBitmap, modelPath);
+                        predictionTextView.setText("Predicción: " + prediction);
+                    } else {
+                        Toast.makeText(MainActivity.this, "El archivo del modelo no existe", Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(MainActivity.this, "No hay imagen original para predecir", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
     }
 
     private void copyAssetsToFiles() {
         AssetManager assetManager = getAssets();
-        String[] files = {"haarcascade_eye.xml", "haarcascade_frontalcatface.xml", "haarcascade_mcs_nose.xml", "haarcascade_mcs_mouth.xml"};
+        String[] files = {"haarcascade_eye.xml", "haarcascade_frontalcatface.xml", "haarcascade_mcs_nose.xml", "haarcascade_mcs_mouth.xml" , "fashion_mnist_mlp.xml"};
 
         for (String filename : files) {
             File outFile = new File(getFilesDir(), filename);
