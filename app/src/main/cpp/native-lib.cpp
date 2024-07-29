@@ -5,9 +5,10 @@
 #include <android/log.h>
 #include <sstream>
 
-#define LOG_TAG "DetectFaces"
+#define LOG_TAG "Predict"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+
 
 using namespace cv;
 using namespace std;
@@ -137,7 +138,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
         jobject bitmapIn,
         jobject bitmapOut) {
 
-    // Cargar los clasificadores
+    //verificar
     CascadeClassifier faceCascade, eyesCascade, noseCascade, mouthCascade;
     if (!faceCascade.load(faceCascadePath) || !eyesCascade.load(eyeCascadePath) ||
         !noseCascade.load(noseCascadePath) || !mouthCascade.load(mouthCascadePath)) {
@@ -145,19 +146,16 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
         return env->NewStringUTF("Error loading cascades");
     }
 
-    // Convertir el bitmap a Mat
     Mat img;
     bitmapToMat(env, bitmapIn, img, false);
 
-    // Convertir la imagen a escala de grises
     Mat gray;
     cvtColor(img, gray, COLOR_RGBA2GRAY);
 
-    // Reducir el ruido y mejorar el contraste
     GaussianBlur(gray, gray, Size(5, 5), 1.5);
     equalizeHist(gray, gray);
 
-    // Detección de rostros
+    //rostros
     vector<Rect> faces;
     faceCascade.detectMultiScale(gray, faces, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
 
@@ -170,7 +168,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
         Mat faceROI = gray(faces[i]);
         vector<Rect> eyes, nose, mouth;
 
-        // Detectar ojos en la región del rostro
+        //ojos
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(20, 20));
         for (size_t j = 0; j < eyes.size(); j++) {
             Rect eyeRect = Rect(faces[i].x + eyes[j].x, faces[i].y + eyes[j].y, eyes[j].width, eyes[j].height);
@@ -178,7 +176,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
             detectionResults << "Eye: " << eyeRect.x << ", " << eyeRect.y << ", " << eyeRect.width << ", " << eyeRect.height << "\n";
         }
 
-        // Detectar nariz en la región del rostro
+        //nariz
         noseCascade.detectMultiScale(faceROI, nose, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(20, 20));
         for (size_t k = 0; k < nose.size(); k++) {
             Rect noseRect = Rect(faces[i].x + nose[k].x, faces[i].y + nose[k].y, nose[k].width, nose[k].height);
@@ -186,24 +184,23 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
             detectionResults << "Nose: " << noseRect.x << ", " << noseRect.y << ", " << noseRect.width << ", " << noseRect.height << "\n";
         }
 
-        // Detectar boca en la región del rostro
+        //boca
         mouthCascade.detectMultiScale(faceROI, mouth, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
         for (size_t l = 0; l < mouth.size(); l++) {
-            Rect mouthRect = Rect(faces[i].x + mouth[l].x, faces[i].y + mouth[l].y, mouth[l].width, mouth[l].height);
-            rectangle(img, mouthRect, Scalar(0, 255, 255), 3); // Amarillo para boca (BGR: 0, 255, 255)
+            Rect mouthRect = Rect(faces[i].x + mouth[l].x, faces[i].y + mouth[l].y + faces[i].height / 2, mouth[l].width, mouth[l].height);
+            rectangle(img, mouthRect, Scalar(0, 0, 255), 3); // Rojo para boca (BGR: 0, 0, 255)
             detectionResults << "Mouth: " << mouthRect.x << ", " << mouthRect.y << ", " << mouthRect.width << ", " << mouthRect.height << "\n";
         }
     }
 
-    // Convertir la imagen procesada de vuelta a bitmap
     matToBitmap(env, img, bitmapOut, false);
 
     return env->NewStringUTF(detectionResults.str().c_str());
 }
 
-
 const Size IMG_SIZE = Size(28, 28);
-vector<string> category_labels = {"Camiseta/Top", "Pantalón", "Jersey", "Vestido", "Abrigo", "Sandalia", "Camisa", "Deportiva", "Bolso", "Bota"};
+vector<string> category_labels = {"Camiseta/Top", "Pantalón", "Jersey", "Vestido", "Abrigo",
+                                  "Sandalia", "Camisa", "Zapatilla", "Bolso", "Bota"};
 
 void computeHOG(Mat& img, vector<float>& descriptors) {
     HOGDescriptor hog(
@@ -216,22 +213,56 @@ void computeHOG(Mat& img, vector<float>& descriptors) {
     hog.compute(img, descriptors);
 }
 
+void removeWhiteBackground(Mat& img, Mat& output) {
+    // Metodo similar a la de la parte 1 del proyecto
+    Mat bgr;
+    cvtColor(img, bgr, COLOR_RGBA2BGR);
+
+    Mat hsv;
+    cvtColor(bgr, hsv, COLOR_BGR2HSV);
+
+
+    Scalar lower_white(0, 0, 200);
+    Scalar upper_white(180, 20, 255);
+
+
+    Mat mask;
+    inRange(hsv, lower_white, upper_white, mask);
+
+
+    bitwise_not(mask, mask);
+
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(5, 5));
+    morphologyEx(mask, mask, MORPH_CLOSE, kernel);
+    morphologyEx(mask, mask, MORPH_OPEN, kernel);
+
+    img.copyTo(output, mask);
+}
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_projectparteii_MainActivity_predict(JNIEnv *env, jobject instance, jobject bitmap, jstring modelPath) {
-    // Convertir el bitmap a Mat
     Mat img;
-    bitmapToMat(env, bitmap, img, false);
+    AndroidBitmapInfo info;
+    void* pixels = 0;
+    CV_Assert(AndroidBitmap_getInfo(env, bitmap, &info) >= 0);
+    CV_Assert(info.format == ANDROID_BITMAP_FORMAT_RGBA_8888);
+    CV_Assert(AndroidBitmap_lockPixels(env, bitmap, &pixels) >= 0);
+    img.create(info.height, info.width, CV_8UC4);
+    Mat tmp(info.height, info.width, CV_8UC4, pixels);
+    tmp.copyTo(img);
+    AndroidBitmap_unlockPixels(env, bitmap);
 
-    // Convertir la imagen a escala de grises
+    //quitar el fondo blanco
+    Mat preprocessed;
+    removeWhiteBackground(img, preprocessed);
+
     Mat gray;
-    cvtColor(img, gray, COLOR_RGBA2GRAY);
+    cvtColor(preprocessed, gray, COLOR_RGBA2GRAY);
 
-    // Redimensionar la imagen a 28x28
     resize(gray, gray, IMG_SIZE);
 
-    // Cargar el modelo
+    //cargar el modelo
     const char *modelPathChars = env->GetStringUTFChars(modelPath, 0);
-    Ptr<ml::ANN_MLP> model = ml::ANN_MLP::load(modelPathChars);
+    Ptr<ANN_MLP> model = ANN_MLP::load(modelPathChars);
     env->ReleaseStringUTFChars(modelPath, modelPathChars);
 
     if (model.empty()) {
@@ -239,32 +270,61 @@ Java_com_example_projectparteii_MainActivity_predict(JNIEnv *env, jobject instan
         return env->NewStringUTF("Error loading model");
     }
 
-    // Extraer HOG características
+    //HOG
     vector<float> descriptors;
     computeHOG(gray, descriptors);
 
-    // Verificar que el tamaño de los descriptores coincida con el tamaño esperado por el modelo
+    //que tenga el mismo dimencion
     if (descriptors.size() != model->getLayerSizes().at<int>(0)) {
         LOGE("El tamaño de los descriptores HOG (%zu) no coincide con el tamaño esperado por el modelo (%d).",
              descriptors.size(), model->getLayerSizes().at<int>(0));
         return env->NewStringUTF("Error: HOG descriptor size mismatch");
     }
 
-    // Convertir a Mat para predecir
-    Mat sample(1, (int)descriptors.size(), CV_32F);
+    //convertir a Mat para predecir
+    Mat sample(1, static_cast<int>(descriptors.size()), CV_32F);
     for (size_t j = 0; j < descriptors.size(); ++j) {
-        sample.at<float>(0, (int)j) = descriptors[j];
+        sample.at<float>(0, static_cast<int>(j)) = descriptors[j];
     }
 
-    // Realizar la predicción
+    //predicción
     Mat response;
     model->predict(sample, response);
-
-    // Encontrar la clase con mayor probabilidad
     Point maxLoc;
-    minMaxLoc(response, nullptr, nullptr, nullptr, &maxLoc);
+    minMaxLoc(response, 0, 0, 0, &maxLoc);
     int predictedLabel = maxLoc.x;
 
-    // Devolver la predicción como un string
+    LOGI("Predicted label: %d", predictedLabel);
+
+    //contorno de la prenda de vestir en la imagen original
+    cvtColor(img, gray, COLOR_RGBA2GRAY);
+    threshold(gray, gray, 0, 255, THRESH_BINARY_INV + THRESH_OTSU);
+
+    vector<vector<Point>> contours;
+    findContours(gray, contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+
+    if (!contours.empty()) {
+        size_t largestContourIdx = 0;
+        double largestArea = 0;
+        for (size_t i = 0; i < contours.size(); ++i) {
+            double area = contourArea(contours[i]);
+            if (area > largestArea) {
+                largestArea = area;
+                largestContourIdx = i;
+            }
+        }
+
+        Rect boundingBox = cv::boundingRect(contours[largestContourIdx]);
+        rectangle(img, boundingBox, Scalar(0, 255, 0), 2);
+
+        double fontScale = 3.0;
+        int thickness = 3;
+        putText(img, category_labels[predictedLabel], Point(boundingBox.x, boundingBox.y - 10), FONT_HERSHEY_SIMPLEX, fontScale, Scalar(0, 255, 0), thickness);
+    }
+
+
+    matToBitmap(env, img, bitmap, false);
+
+    //prediccion
     return env->NewStringUTF(category_labels[predictedLabel].c_str());
 }

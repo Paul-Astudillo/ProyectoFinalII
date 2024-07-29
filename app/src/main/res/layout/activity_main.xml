@@ -17,6 +17,21 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintWidth_percent="0.5" />
 
+
+    <TextView
+        android:id="@+id/text_prediction"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="172dp"
+        android:layout_marginEnd="173dp"
+        android:layout_marginBottom="312dp"
+        android:text="Prediccion"
+        android:textSize="24sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="parent" />
+
     <Button
         android:id="@+id/button_select_photo"
         android:layout_width="0dp"
@@ -67,6 +82,17 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
         android:text="Detectar Rostros"
+        app:layout_constraintBottom_toTopOf="@+id/button_predict"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/button_predict"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="Predecir"
         app:layout_constraintBottom_toTopOf="@+id/button_save_image"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -76,7 +102,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="Guardar Imagen"
+        android:text="Guardar y Enviar Imagen con Posiciones"
         app:layout_constraintBottom_toTopOf="@+id/button_send_data"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
@@ -86,13 +112,10 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="Enviar"
+        android:text="Enviar Predicción"
         app:layout_constraintBottom_toTopOf="@+id/edit_text_ip"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
-
-
-    <!-- Existing elements -->
 
     <EditText
         android:id="@+id/edit_text_ip"
@@ -105,28 +128,5 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent" />
-
-    <Button
-        android:id="@+id/button_predict"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Predecir"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/button_save_image" />
-
-    <TextView
-        android:id="@+id/text_prediction"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="172dp"
-        android:layout_marginEnd="173dp"
-        android:layout_marginBottom="262dp"
-        android:text="Predicción"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>
