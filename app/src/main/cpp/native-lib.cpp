@@ -138,7 +138,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
         jobject bitmapIn,
         jobject bitmapOut) {
 
-    //verificar
+    // Verificar
     CascadeClassifier faceCascade, eyesCascade, noseCascade, mouthCascade;
     if (!faceCascade.load(faceCascadePath) || !eyesCascade.load(eyeCascadePath) ||
         !noseCascade.load(noseCascadePath) || !mouthCascade.load(mouthCascadePath)) {
@@ -155,7 +155,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
     GaussianBlur(gray, gray, Size(5, 5), 1.5);
     equalizeHist(gray, gray);
 
-    //rostros
+    // Rostros
     vector<Rect> faces;
     faceCascade.detectMultiScale(gray, faces, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
 
@@ -166,9 +166,9 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
         detectionResults << "Face: " << faces[i].x << ", " << faces[i].y << ", " << faces[i].width << ", " << faces[i].height << "\n";
 
         Mat faceROI = gray(faces[i]);
-        vector<Rect> eyes, nose, mouth;
+        vector<Rect> eyes, nose, mouths;
 
-        //ojos
+        // Ojos
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(20, 20));
         for (size_t j = 0; j < eyes.size(); j++) {
             Rect eyeRect = Rect(faces[i].x + eyes[j].x, faces[i].y + eyes[j].y, eyes[j].width, eyes[j].height);
@@ -176,7 +176,7 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
             detectionResults << "Eye: " << eyeRect.x << ", " << eyeRect.y << ", " << eyeRect.width << ", " << eyeRect.height << "\n";
         }
 
-        //nariz
+        // Nariz
         noseCascade.detectMultiScale(faceROI, nose, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(20, 20));
         for (size_t k = 0; k < nose.size(); k++) {
             Rect noseRect = Rect(faces[i].x + nose[k].x, faces[i].y + nose[k].y, nose[k].width, nose[k].height);
@@ -184,11 +184,13 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
             detectionResults << "Nose: " << noseRect.x << ", " << noseRect.y << ", " << noseRect.width << ", " << noseRect.height << "\n";
         }
 
-        //boca
-        mouthCascade.detectMultiScale(faceROI, mouth, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
-        for (size_t l = 0; l < mouth.size(); l++) {
-            Rect mouthRect = Rect(faces[i].x + mouth[l].x, faces[i].y + mouth[l].y + faces[i].height / 2, mouth[l].width, mouth[l].height);
-            rectangle(img, mouthRect, Scalar(0, 0, 255), 3); // Rojo para boca (BGR: 0, 0, 255)
+        // Boca
+        // Ajustar el ROI para la boca a la mitad inferior del rostro
+        Mat lowerFaceROI = faceROI(Rect(0, faceROI.rows / 2, faceROI.cols, faceROI.rows / 2));
+        mouthCascade.detectMultiScale(lowerFaceROI, mouths, 1.1, 5, 0 | CASCADE_SCALE_IMAGE, Size(30, 30));
+        for (size_t j = 0; j < mouths.size(); j++) {
+            Rect mouthRect = Rect(faces[i].x + mouths[j].x, faces[i].y + faces[i].height / 2 + mouths[j].y, mouths[j].width, mouths[j].height);
+            rectangle(img, mouthRect, Scalar(0, 0, 255), 4); // Rojo para boca (BGR: 0, 0, 255)
             detectionResults << "Mouth: " << mouthRect.x << ", " << mouthRect.y << ", " << mouthRect.width << ", " << mouthRect.height << "\n";
         }
     }
@@ -197,6 +199,8 @@ Java_com_example_projectparteii_MainActivity_detectFaces(
 
     return env->NewStringUTF(detectionResults.str().c_str());
 }
+
+
 
 const Size IMG_SIZE = Size(28, 28);
 vector<string> category_labels = {"Camiseta/Top", "Pantalón", "Jersey", "Vestido", "Abrigo",

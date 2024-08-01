@@ -60,7 +60,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private native String detectFaces(Bitmap bitmap, Bitmap processedBitmap);
+
     private native void initCascadePaths(String faceCascade, String eyeCascade, String noseCascade, String mouthCascade);
+
     private native String predict(Bitmap bitmap, String modelPath);
 
     @Override
@@ -173,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     if (isValidIpAddress(ipEditText.getText().toString())) {
                         saveImageAndPositions();
-                        sendImageAndData(ipEditText.getText().toString(), processedBitmap, detectionResults);
+                        sendImageAndData(ipEditText.getText().toString(), originalBitmap, processedBitmap, detectionResults);
                     } else {
                         Toast.makeText(MainActivity.this, "Dirección IP no válida", Toast.LENGTH_SHORT).show();
                     }
@@ -186,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (isValidIpAddress(ipEditText.getText().toString())) {
-                    sendProcessedPrediction(ipEditText.getText().toString());
+                    sendProcessedPrediction(ipEditText.getText().toString(), originalBitmap, processedBitmap, predictionTextView.getText().toString());
                 } else {
                     Toast.makeText(MainActivity.this, "Dirección IP no válida", Toast.LENGTH_SHORT).show();
                 }
@@ -212,7 +214,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void copyAssetsToFiles() {
         AssetManager assetManager = getAssets();
-        String[] files = {"haarcascade_eye.xml", "haarcascade_frontalcatface.xml", "haarcascade_mcs_nose.xml", "haarcascade_mcs_mouth.xml" , "fashion_mnist_mlp.xml"};
+        String[] files = {"haarcascade_eye.xml", "haarcascade_frontalcatface.xml", "haarcascade_mcs_nose.xml", "haarcascade_mcs_mouth.xml", "fashion_mnist_mlp.xml"};
 
         for (String filename : files) {
             File outFile = new File(getFilesDir(), filename);
@@ -281,20 +283,20 @@ public class MainActivity extends AppCompatActivity {
 
     private void saveImageAndPositions() {
         if (processedBitmap != null && detectionResults != null) {
-            //gurdamos en el celu
+            // Guardar en el celular
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-            String imageFileName = "IMG_" + timeStamp + ".jpg";
+            String imageFileName = "IMG_" + timeStamp + ".png";
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.Images.Media.DISPLAY_NAME, imageFileName);
-                values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
                 values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/MyApp");
 
                 Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
                 if (uri != null) {
                     try (OutputStream out = getContentResolver().openOutputStream(uri)) {
-                        processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                        processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
                         Toast.makeText(this, "Imagen guardada: " + imageFileName, Toast.LENGTH_SHORT).show();
                     } catch (IOException e) {
                         Log.e(TAG, "Error saving image", e);
@@ -308,7 +310,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 File imageFile = new File(storageDir, imageFileName);
                 try (FileOutputStream out = new FileOutputStream(imageFile)) {
-                    processedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+                    processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
                     Toast.makeText(this, "Imagen guardada: " + imageFileName, Toast.LENGTH_SHORT).show();
                 } catch (IOException e) {
                     Log.e(TAG, "Error saving image", e);
@@ -316,7 +318,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            //posiciones en un txt
+            // Guardar posiciones en un txt
             String textFileName = "POSITIONS_" + timeStamp + ".txt";
             File textFile;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -355,174 +357,150 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void sendImageAndData(String ipAddress, Bitmap image, String detectionResults) {
-        String imageFileName = "temp_image.png";
-        File imageFile = new File(getExternalFilesDir(null), imageFileName);
-        try (FileOutputStream out = new FileOutputStream(imageFile)) {
-            image.compress(Bitmap.CompressFormat.PNG, 100, out);
+    private void sendImageAndData(String ipAddress, Bitmap originalBitmap, Bitmap processedBitmap, String detectionResults) {
+        String originalImageFileName = "temp_original_image.png";
+        String processedImageFileName = "temp_processed_image.png";
+
+        File originalImageFile = new File(getExternalFilesDir(null), originalImageFileName);
+        File processedImageFile = new File(getExternalFilesDir(null), processedImageFileName);
+
+        try (FileOutputStream originalOut = new FileOutputStream(originalImageFile);
+             FileOutputStream processedOut = new FileOutputStream(processedImageFile)) {
+            originalBitmap.compress(Bitmap.CompressFormat.PNG, 100, originalOut);
+            processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, processedOut);
         } catch (IOException e) {
-            Log.e(TAG, "Error saving image", e);
+            Log.e(TAG, "Error saving images", e);
             return;
         }
 
-        //necesitamos hilos para mandar los archivos la imegn y el txt
+        // Enviar las imágenes y los datos de detección
         new Thread(new Runnable() {
             @Override
             public void run() {
-                String serverURL = "http://" + ipAddress + ":5000/recepcion";
-                try {
-                    URL url = new URL(serverURL);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("POST");
-                    connection.setDoOutput(true);
-                    connection.setRequestProperty("Content-Type", "image/png");
-
-                    try (OutputStream outputStream = connection.getOutputStream();
-                         FileInputStream fileInputStream = new FileInputStream(imageFile)) {
-                        byte[] buffer = new byte[4096];
-                        int bytesRead;
-                        while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-                            outputStream.write(buffer, 0, bytesRead);
-                        }
-                    }
-
-                    final int responseCode = connection.getResponseCode();
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Imagen enviada correctamente", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    } else {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Error al enviar la imagen, código: " + responseCode, Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(MainActivity.this, "Error al enviar la imagen", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }
-            }
-        }).start();
-
-        //hilo para el texto
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                String serverURL2 = "http://" + ipAddress + ":5000/recepciontxt";
-                try {
-                    URL url = new URL(serverURL2);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("POST");
-                    connection.setDoOutput(true);
-                    connection.setRequestProperty("Content-Type", "text/plain");
-
-                    //enviar las posiciones de detección como texto
-                    try (OutputStream outputStream = connection.getOutputStream()) {
-                        outputStream.write(detectionResults.getBytes());
-                    }
-
-                    final int responseCode = connection.getResponseCode();
-                    if (responseCode == HttpURLConnection.HTTP_OK) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Texto enviado correctamente", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    } else {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Error al enviar el texto, código: " + responseCode, Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(MainActivity.this, "Error al enviar el texto", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                }
+                sendFileToEndpoint(ipAddress, "/recepcion1original", originalImageFile);
+                sendFileToEndpoint(ipAddress, "/recepcion1deteccion", processedImageFile);
+                sendDataToEndpoint(ipAddress, "/recepcion1datos", detectionResults);
             }
         }).start();
     }
 
-    private void sendProcessedPrediction(String ipAddress) {
-        if (processedBitmap != null) {
-            //gurdamos l aimgen de predccion
-            String imageFileName = "temp_processed_image.png";
-            File imageFile = new File(getExternalFilesDir(null), imageFileName);
-            try (FileOutputStream out = new FileOutputStream(imageFile)) {
-                processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+    private void sendProcessedPrediction(String ipAddress, Bitmap originalBitmap, Bitmap processedBitmap, String predictionText) {
+        if (processedBitmap != null && originalBitmap != null) {
+            String originalImageFileName = "temp_original_image.png";
+            String processedImageFileName = "temp_processed_image.png";
+
+            File originalImageFile = new File(getExternalFilesDir(null), originalImageFileName);
+            File processedImageFile = new File(getExternalFilesDir(null), processedImageFileName);
+
+            try (FileOutputStream originalOut = new FileOutputStream(originalImageFile);
+                 FileOutputStream processedOut = new FileOutputStream(processedImageFile)) {
+                // Asegúrate de comprimir y guardar la imagen original
+                originalBitmap.compress(Bitmap.CompressFormat.PNG, 100, originalOut);
+                // Asegúrate de comprimir y guardar la imagen procesada
+                processedBitmap.compress(Bitmap.CompressFormat.PNG, 100, processedOut);
             } catch (IOException e) {
-                Log.e(TAG, "Error saving image", e);
+                Log.e(TAG, "Error saving images", e);
                 return;
             }
 
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    String serverURL = "http://" + ipAddress + ":5000/recepcionpred";
-                    try {
-                        URL url = new URL(serverURL);
-                        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                        connection.setRequestMethod("POST");
-                        connection.setDoOutput(true);
-                        connection.setRequestProperty("Content-Type", "image/png");
-
-                        //enviar la imagen procesada
-                        try (OutputStream outputStream = connection.getOutputStream();
-                             FileInputStream fileInputStream = new FileInputStream(imageFile)) {
-                            byte[] buffer = new byte[4096];
-                            int bytesRead;
-                            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
-                                outputStream.write(buffer, 0, bytesRead);
-                            }
-                        }
-
-                        //obtener la respuesta del servidor
-                        final int responseCode = connection.getResponseCode();
-                        if (responseCode == HttpURLConnection.HTTP_OK) {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Toast.makeText(MainActivity.this, "Imagen procesada enviada correctamente", Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                        } else {
-                            runOnUiThread(new Runnable() {
-                                @Override
-                                public void run() {
-                                    Toast.makeText(MainActivity.this, "Error al enviar la imagen procesada, código: " + responseCode, Toast.LENGTH_SHORT).show();
-                                }
-                            });
-                        }
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(MainActivity.this, "Error al enviar la imagen procesada", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
+                    // Asegúrate de enviar la imagen original al endpoint correcto
+                    sendFileToEndpoint(ipAddress, "/recepcion2original", originalImageFile);
+                    // Asegúrate de enviar la imagen procesada al endpoint correcto
+                    sendFileToEndpoint(ipAddress, "/recepcion2prediccion", processedImageFile);
+                    sendDataToEndpoint(ipAddress, "/recepcion2datos", predictionText);
                 }
             }).start();
         } else {
-            Toast.makeText(this, "No hay imagen procesada para enviar", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "No hay imagen procesada o imagen original para enviar", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+    private void sendFileToEndpoint(String ipAddress, String endpoint, File file) {
+        String serverURL = "http://" + ipAddress + ":5000" + endpoint;
+        try {
+            URL url = new URL(serverURL);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/octet-stream");
+
+            try (OutputStream outputStream = connection.getOutputStream();
+                 FileInputStream fileInputStream = new FileInputStream(file)) {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+            }
+
+            final int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Archivo enviado correctamente a " + endpoint, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } else {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Error al enviar el archivo a " + endpoint + ", código: " + responseCode, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(MainActivity.this, "Error al enviar el archivo a " + endpoint, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+    }
+
+    private void sendDataToEndpoint(String ipAddress, String endpoint, String data) {
+        String serverURL = "http://" + ipAddress + ":5000" + endpoint;
+        try {
+            URL url = new URL(serverURL);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "text/plain");
+
+            try (OutputStream outputStream = connection.getOutputStream()) {
+                outputStream.write(data.getBytes());
+            }
+
+            final int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Datos enviados correctamente a " + endpoint, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } else {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Error al enviar los datos a " + endpoint + ", código: " + responseCode, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(MainActivity.this, "Error al enviar los datos a " + endpoint, Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 
@@ -530,4 +508,5 @@ public class MainActivity extends AppCompatActivity {
         String regex = "^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)$";
         return ipAddress.matches(regex);
     }
+
 }
